@@ -337,7 +337,8 @@
             document.getElementById('btnPause').addEventListener('click', pauseSim);
             document.getElementById('btnReset').addEventListener('click', resetSim);
 
-            for (var k = 1; k <= 4; k++) {
+            var k = 1;
+            for (k = 1; k <= 4; k++) {
                 (function(stationId) {
                     var slider = document.getElementById('ws' + stationId + '-slider');
                     slider.addEventListener('input', function() {
@@ -362,7 +363,8 @@
             clock += 0.1;
             document.getElementById('clockDisplay').innerText = clock.toFixed(1) + "s";
 
-            for (var i = 4; i >= 1; i--) {
+            var i = 4;
+            for (i = 4; i >= 1; i--) {
                 var st = stations[i];
 
                 if (!st.activeItem && (i === 1 || st.queue.length > 0)) {
@@ -404,12 +406,14 @@
 
         function updateLeadTimeAverages() {
             var sumW = 0;
-            for (var i = 0; i < completedWhite.length; i++) { sumW += completedWhite[i]; }
+            var i = 0;
+            for (i = 0; i < completedWhite.length; i++) { sumW += completedWhite[i]; }
             var avgW = 0;
             if (completedWhite.length > 0) { avgW = sumW / completedWhite.length; }
 
             var sumO = 0;
-            for (var j = 0; j < completedOrange.length; j++) { sumO += completedOrange[j]; }
+            var j = 0;
+            for (j = 0; j < completedOrange.length; j++) { sumO += completedOrange[j]; }
             var avgO = 0;
             if (completedOrange.length > 0) { avgO = sumO / completedOrange.length; }
             
@@ -417,14 +421,12 @@
             document.getElementById('ltOrangeDisplay').innerText = avgO.toFixed(1) + "s";
 
             if (graphLT) {
-                // Avoiding dataset index brackets entirely by replacing the whole array
-                var newDataArray = new Array(parseFloat(avgW.toFixed(1)), parseFloat(avgO.toFixed(1)));
-                var oldData = graphLT.data;
-                oldData.datasets.pop();
-                oldData.datasets.push({
-                    label: 'Avg Lead Time (Seconds)',
-                    data: newDataArray,
-                    backgroundColor: new Array('#005A9C', '#e65100')
+                var dsIndex = 0;
+                graphLT.data.datasets.forEach(function(dataset) {
+                    if (dsIndex === 0) {
+                        dataset.data = new Array(Number(avgW.toFixed(1)), Number(avgO.toFixed(1)));
+                    }
+                    dsIndex++;
                 });
                 graphLT.update();
             }
@@ -433,12 +435,14 @@
         function calculateAndLogWIP() {
             var whiteCount = 0;
             var orangeCount = 0;
+            var i = 1;
+            var j = 0;
 
-            for (var i = 1; i <= 4; i++) {
+            for (i = 1; i <= 4; i++) {
                 if (stations[i].activeItem) {
                     if (stations[i].activeItem.type === 'white') { whiteCount++; } else { orangeCount++; }
                 }
-                for (var j = 0; j < stations[i].queue.length; j++) {
+                for (j = 0; j < stations[i].queue.length; j++) {
                     if (stations[i].queue[j].type === 'white') { whiteCount++; } else { orangeCount++; }
                 }
             }
@@ -448,25 +452,22 @@
 
             if (clock - lastChartUpdate >= 1) {
                 if (graphWIP) {
-                    var newTimeLabel = Math.floor(clock) + 's';
-                    
-                    // Rebuilding arrays to avoid bracket mutation errors
-                    var wArray = graphWIP.data.datasets.shift().data;
-                    var oArray = graphWIP.data.datasets.shift().data;
-                    
-                    wArray.push(whiteCount);
-                    oArray.push(orangeCount);
-                    graphWIP.data.labels.push(newTimeLabel);
-
+                    graphWIP.data.labels.push(Math.floor(clock) + 's');
                     if (graphWIP.data.labels.length > 60) {
                         graphWIP.data.labels.shift();
-                        wArray.shift();
-                        oArray.shift();
                     }
                     
-                    graphWIP.data.datasets.push({ label: 'White Planes', borderColor: '#005A9C', backgroundColor: 'rgba(0, 90, 156, 0.1)', data: wArray, fill: true, tension: 0.2 });
-                    graphWIP.data.datasets.push({ label: 'Orange Planes', borderColor: '#e65100', backgroundColor: 'rgba(230, 81, 0, 0.1)', data: oArray, fill: true, tension: 0.2 });
-                    
+                    var wipIndex = 0;
+                    graphWIP.data.datasets.forEach(function(dataset) {
+                        if (wipIndex === 0) {
+                            dataset.data.push(whiteCount);
+                            if (dataset.data.length > 60) { dataset.data.shift(); }
+                        } else if (wipIndex === 1) {
+                            dataset.data.push(orangeCount);
+                            if (dataset.data.length > 60) { dataset.data.shift(); }
+                        }
+                        wipIndex++;
+                    });
                     graphWIP.update();
                 }
                 lastChartUpdate = clock;
@@ -474,7 +475,8 @@
         }
 
         function renderProgress() {
-            for (var i = 1; i <= 4; i++) {
+            var i = 1;
+            for (i = 1; i <= 4; i++) {
                 var st = stations[i];
                 var activeBox = document.getElementById('ws' + i + '-job');
                 var progBar = document.getElementById('ws' + i + '-progress');
@@ -493,10 +495,12 @@
         }
 
         function renderQueues() {
-            for (var i = 2; i <= 4; i++) {
+            var i = 2;
+            var j = 0;
+            for (i = 2; i <= 4; i++) {
                 var qDiv = document.getElementById('ws' + i + '-queue');
                 qDiv.innerHTML = '';
-                for (var j = 0; j < stations[i].queue.length; j++) {
+                for (j = 0; j < stations[i].queue.length; j++) {
                     qDiv.appendChild(createPaperElement(stations[i].queue[j].type));
                 }
             }
@@ -533,12 +537,18 @@
             document.getElementById('ltWhiteDisplay').innerText = "0.0s";
             document.getElementById('ltOrangeDisplay').innerText = "0.0s";
             
-            for (var i = 1; i <= 4; i++) {
+            var i = 1;
+            for (i = 1; i <= 4; i++) {
                 stations[i].progress = 0;
                 stations[i].activeItem = null;
                 stations[i].queue = new Array();
-                var defaultTimes = new Array(2, 10, 7, 3);
-                var dTime = defaultTimes[i-1];
+                
+                var dTime = 0;
+                if (i === 1) { dTime = 2; }
+                else if (i === 2) { dTime = 10; }
+                else if (i === 3) { dTime = 7; }
+                else { dTime = 3; }
+                
                 document.getElementById('ws' + i + '-slider').value = dTime;
                 updateCycleTime(i, dTime);
             }
@@ -550,18 +560,14 @@
             
             if (graphWIP) {
                 graphWIP.data.labels = new Array();
-                graphWIP.data.datasets.shift();
-                graphWIP.data.datasets.shift();
-                graphWIP.data.datasets.push({ label: 'White Planes', borderColor: '#005A9C', backgroundColor: 'rgba(0, 90, 156, 0.1)', data: new Array(), fill: true, tension: 0.2 });
-                graphWIP.data.datasets.push({ label: 'Orange Planes', borderColor: '#e65100', backgroundColor: 'rgba(230, 81, 0, 0.1)', data: new Array(), fill: true, tension: 0.2 });
+                graphWIP.data.datasets.forEach(function(dataset) {
+                    dataset.data = new Array();
+                });
                 graphWIP.update();
             }
             if (graphLT) {
-                graphLT.data.datasets.pop();
-                graphLT.data.datasets.push({
-                    label: 'Avg Lead Time (Seconds)',
-                    data: new Array(0, 0),
-                    backgroundColor: new Array('#005A9C', '#e65100')
+                graphLT.data.datasets.forEach(function(dataset) {
+                    dataset.data = new Array(0, 0);
                 });
                 graphLT.update();
             }
