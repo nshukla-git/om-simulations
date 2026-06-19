@@ -28,4 +28,4 @@ Because this tool is entirely client-side, it is exceptionally easy to host and 
 Do not upload the HTML file directly to Canvas file storage, as the LMS previewer will strip the JavaScript required to run the simulation. Instead, embed the live GitHub Pages link into an Assignment or Page using an iframe:
 
 ```html
-<iframe src="[https://your-username.github.io/repo-name/paper-planes-sim.html](https://your-username.github.io/repo-name/paper-planes-sim.html)" width="100%" height="750px" style="border:none;"></iframe>
+<iframe src="[[https://your-username.github.io/repo-name/paper-planes-sim.html](https://nshukla-git.github.io/om-simulations/index.html)]([https://your-username.github.io/repo-name/paper-planes-sim.html](https://nshukla-git.github.io/om-simulations/index.html))" width="100%" height="750px" style="border:none;"></iframe>
