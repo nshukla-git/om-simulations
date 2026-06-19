@@ -24,12 +24,6 @@ It is specifically designed to facilitate assessments and practical workshops co
 
 Because this tool is entirely client-side, it is exceptionally easy to host and embed into Learning Management Systems (LMS) such as Canvas, Blackboard, or Moodle.
 
-### Hosting via GitHub Pages
-1. Upload the `paper-planes-sim.html` file to this repository.
-2. Navigate to **Settings** > **Pages**.
-3. Under "Source", select the `main` branch and save.
-4. GitHub will generate a live HTTPS link (e.g., `https://your-username.github.io/repo-name/paper-planes-sim.html`).
-
 ### Embedding into an LMS (Canvas)
 Do not upload the HTML file directly to Canvas file storage, as the LMS previewer will strip the JavaScript required to run the simulation. Instead, embed the live GitHub Pages link into an Assignment or Page using an iframe:
 
