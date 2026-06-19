@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Planes Corp: Lean Flow Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .dashboard {
+            background-color: #fff;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-top: 4px solid #005A9C;
+        }
+        .metric { text-align: center; }
+        .metric h3 {
+            margin: 0 0 5px 0;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            color: #666;
+        }
+        .metric span {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #005A9C;
+        }
+        .metric-orange { color: #e65100 !important; }
+        .controls button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+            transition: background-color 0.2s;
+        }
+        .btn-start { background-color: #2e7d32; color: white; }
+        .btn-start:hover { background-color: #1b5e20; }
+        .btn-pause { background-color: #f57c00; color: white; }
+        .btn-pause:hover { background-color: #e65100; }
+        .btn-reset { background-color: #d32f2f; color: white; }
+        .btn-reset:hover { background-color: #c62828; }
+        
+        .factory-floor {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .workstation {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .workstation h2 {
+            font-size: 1.1rem;
+            margin-top: 0;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .slider-container {
+            margin-top: auto;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
+        .slider-container label {
+            display: block;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .slider-container input { width: 100%; }
+        .cycle-time-display {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #555;
+        }
+        
+        .process-area {
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .queue-area {
+            height: 60px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 4px;
+            margin-bottom: 10px;
+            padding: 5px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            overflow-y: auto;
+        }
+        .paper-item {
+            width: 12px;
+            height: 16px;
+            border: 1px solid #999;
+            border-radius: 2px;
+            box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .paper-white { background-color: #ffffff; }
+        .paper-orange { background-color: #ff9800; border-color: #e65100; }
+        
+        .active-job {
+            width: 40px;
+            height: 50px;
+            border: 2px dashed #005A9C;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #005A9C;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        .queue-title {
+            font-size: 0.75rem;
+            color: #777;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+
+        .analytics-container {
+            display: flex;
+            gap: 15px;
+            height: 300px;
+        }
+        .chart-card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-card h3 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 1rem;
+            color: #333;
+        }
+        .canvas-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="metric">
+            <h3>Simulation Clock</h3>
+            <span id="clockDisplay">0.0s</span>
+        </div>
+        <div class="metric">
+            <h3>System WIP (White | Orange)</h3>
+            <span><span id="wipWhiteDisplay">0</span> | <span id="wipOrangeDisplay" class="metric-orange">0</span></span>
+        </div>
+        <div class="metric">
+            <h3>Avg Lead Time (White | Orange)</h3>
+            <span><span id="ltWhiteDisplay">0.0s</span> | <span id="ltOrangeDisplay" class="metric-orange">0.0s</span></span>
+        </div>
+        <div class="controls">
+            <button class="btn-start" id="btnStart" onclick="startSim()">Start</button>
+            <button class="btn-pause" id="btnPause" onclick="pauseSim()" disabled>Pause</button>
+            <button class="btn-reset" id="btnReset" onclick="resetSim()">Reset</button>
+        </div>
+    </div>
+
+    <div class="factory-floor">
+        <div class="workstation">
+            <h2>Operator 1<br><small>(Fold in half)</small></h2>
+            <div class="queue-title">Raw Material (Infinite)</div>
+            <div class="queue-area" style="background-color: transparent; border: none; align-items: center; justify-content: center;">
+                <div style="color: #888; font-style: italic;">Supplier</div>
+            </div>
+            <div class="process-area">
+                <div class="active-job" id="ws1-job"></div>
+                <div class="progress-bar"><div class="progress-fill" id="ws1-progress"></div></div>
+            </div>
+            <div class="slider-container">
+                <label for="ws1-slider">Cycle Time (Seconds):</label>
+                <input type="range" id="ws1-slider" min="1" max="15" value="2" oninput="updateCycleTime(1, this.value)">
+                <div class="cycle-time-display" id="ws1-display">2.0s</div>
+            </div>
+        </div>
+
+        <div class="workstation">
+            <h2>Operator 2<br><small>(1 Open, 4 Folds, 2 Tears)</small></h2>
+            <div class="queue-title">Inbound WIP Queue</div>
+            <div class="queue-area" id="ws2-queue"></div>
+            <div class="process-area">
+                <div class="active-job" id="ws2-job"></div>
+                <div class="progress-bar"><div class="progress-fill" id="ws2-progress"></div></div>
+            </div>
+            <div class="slider-container">
+                <label for="ws2-slider">Cycle Time (Seconds):</label>
+                <input type="range" id="ws2-slider" min="1" max="15" value="10" oninput="updateCycleTime(2, this.value)">
+                <div class="cycle-time-display" id="ws2-display">10.0s</div>
+            </div>
+        </div>
+
+        <div class="workstation">
+            <h2>Operator 3<br><small>(1 Open, 4 Folds)</small></h2>
+            <div class="queue-title">Inbound WIP Queue</div>
+            <div class="queue-area" id="ws3-queue"></div>
+            <div class="process-area">
+                <div class="active-job" id="ws3-job"></div>
+                <div class="progress-bar"><div class="progress-fill" id="ws3-progress"></div></div>
+            </div>
+            <div class="slider-container">
+                <label for="ws3-slider">Cycle Time (Seconds):</label>
+                <input type="range" id="ws3-slider" min="1" max="15" value="7" oninput="updateCycleTime(3, this.value)">
+                <div class="cycle-time-display" id="ws3-display">7.0s</div>
+            </div>
+        </div>
+
+        <div class="workstation">
+            <h2>Operator 4<br><small>(2 Final Folds)</small></h2>
+            <div class="queue-title">Inbound WIP Queue</div>
+            <div class="queue-area" id="ws4-queue"></div>
+            <div class="process-area">
+                <div class="active-job" id="ws4-job"></div>
+                <div class="progress-bar"><div class="progress-fill" id="ws4-progress"></div></div>
+            </div>
+            <div class="slider-container">
+                <label for="ws4-slider">Cycle Time (Seconds):</label>
+                <input type="range" id="ws4-slider" min="1" max="15" value="3" oninput="updateCycleTime(4, this.value)">
+                <div class="cycle-time-display" id="ws4-display">3.0s</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="analytics-container">
+        <div class="chart-card">
+            <h3>Live System WIP Accumulation</h3>
+            <div class="canvas-wrapper">
+                <canvas id="wipChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-card">
+            <h3>Average Lead Time (System Exit)</h3>
+            <div class="canvas-wrapper">
+                <canvas id="leadTimeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let timerInterval = null;
+        let clock = 0;
+        let isRunning = false;
+        let itemCounter = 0;
+        const tickRate = 100;
+        
+        let completedWhite = [];
+        let completedOrange = [];
+        let chartTimeLabels = [];
+        let wipWhiteData = [];
+        let wipOrangeData = [];
+        let lastChartUpdate = 0;
+
+        const stations = {
+            1: { cycleTime: 2, progress: 0, activeItem: null, queue: [] },
+            2: { cycleTime: 10, progress: 0, activeItem: null, queue: [] },
+            3: { cycleTime: 7, progress: 0, activeItem: null, queue: [] },
+            4: { cycleTime: 3, progress: 0, activeItem: null, queue: [] }
+        };
+
+        const wipCtx = document.getElementById('wipChart').getContext('2d');
+        const wipChart = new Chart(wipCtx, {
+            type: 'line',
+            data: {
+                labels: chartTimeLabels,
+                datasets: [
+                    { label: 'White Planes (Standard)', borderColor: '#005A9C', backgroundColor: 'rgba(0, 90, 156, 0.1)', data: wipWhiteData, fill: true, tension: 0.2 },
+                    { label: 'Orange Planes (Special)', borderColor: '#e65100', backgroundColor: 'rgba(230, 81, 0, 0.1)', data: wipOrangeData, fill: true, tension: 0.2 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, suggestedMax: 10 } }, animation: false }
+        });
+
+        const ltCtx = document.getElementById('leadTimeChart').getContext('2d');
+        const leadTimeChart = new Chart(ltCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Standard (White)', 'Special Order (Orange)'],
+                datasets: [{
+                    label: 'Avg Lead Time (Seconds)',
+                    data:,
+                    backgroundColor: ['#005A9C', '#e65100']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+        });
+
+        function updateCycleTime(stationId, value) {
+            stations[stationId].cycleTime = parseFloat(value);
+            document.getElementById('ws' + stationId + '-display').innerText = value + ".0s";
+        }
+
+        function createPaperElement(type) {
+            const el = document.createElement('div');
+            el.className = 'paper-item paper-' + type;
+            return el;
+        }
+
+        function simTick() {
+            clock += 0.1;
+            document.getElementById('clockDisplay').innerText = clock.toFixed(1) + "s";
+
+            for (let i = 4; i >= 1; i--) {
+                const st = stations[i];
+
+                if (!st.activeItem && (i === 1 || st.queue.length > 0)) {
+                    if (i === 1) {
+                        itemCounter++;
+                        const type = Math.random() < 0.1 ? 'orange' : 'white';
+                        st.activeItem = { id: itemCounter, type: type, entryTime: clock };
+                    } else {
+                        st.activeItem = st.queue.shift();
+                    }
+                    st.progress = 0;
+                    renderQueues();
+                }
+
+                if (st.activeItem) {
+                    st.progress += 0.1;
+                    if (st.progress >= st.cycleTime) {
+                        if (i === 4) {
+                            const leadTime = clock - st.activeItem.entryTime;
+                            if (st.activeItem.type === 'white') {
+                                completedWhite.push(leadTime);
+                            } else {
+                                completedOrange.push(leadTime);
+                            }
+                            updateLeadTimeAverages();
+                        } else {
+                            stations[i + 1].queue.push(st.activeItem);
+                        }
+                        st.activeItem = null;
+                        st.progress = 0;
+                        renderQueues();
+                    }
+                }
+            }
+
+            renderProgress();
+            calculateAndLogWIP();
+        }
+
+        function updateLeadTimeAverages() {
+            let sumW = 0;
+            for (let i = 0; i < completedWhite.length; i++) { sumW += completedWhite[i]; }
+            let avgW = 0;
+            if (completedWhite.length > 0) { avgW = sumW / completedWhite.length; }
+
+            let sumO = 0;
+            for (let j = 0; j < completedOrange.length; j++) { sumO += completedOrange[j]; }
+            let avgO = 0;
+            if (completedOrange.length > 0) { avgO = sumO / completedOrange.length; }
+            
+            document.getElementById('ltWhiteDisplay').innerText = avgW.toFixed(1) + "s";
+            document.getElementById('ltOrangeDisplay').innerText = avgO.toFixed(1) + "s";
+
+            leadTimeChart.data.datasets.data = [avgW.toFixed(1), avgO.toFixed(1)];
+            leadTimeChart.update();
+        }
+
+        function calculateAndLogWIP() {
+            let whiteCount = 0;
+            let orangeCount = 0;
+
+            for (let i = 1; i <= 4; i++) {
+                if (stations[i].activeItem) {
+                    if (stations[i].activeItem.type === 'white') { whiteCount++; } else { orangeCount++; }
+                }
+                for (let j = 0; j < stations[i].queue.length; j++) {
+                    if (stations[i].queue[j].type === 'white') { whiteCount++; } else { orangeCount++; }
+                }
+            }
+
+            document.getElementById('wipWhiteDisplay').innerText = whiteCount;
+            document.getElementById('wipOrangeDisplay').innerText = orangeCount;
+
+            if (clock - lastChartUpdate >= 1) {
+                chartTimeLabels.push(Math.floor(clock) + 's');
+                wipWhiteData.push(whiteCount);
+                wipOrangeData.push(orangeCount);
+                
+                if (chartTimeLabels.length > 60) {
+                    chartTimeLabels.shift();
+                    wipWhiteData.shift();
+                    wipOrangeData.shift();
+                }
+                
+                wipChart.update();
+                lastChartUpdate = clock;
+            }
+        }
+
+        function renderProgress() {
+            for (let i = 1; i <= 4; i++) {
+                const st = stations[i];
+                const activeBox = document.getElementById('ws' + i + '-job');
+                const progBar = document.getElementById('ws' + i + '-progress');
+                
+                activeBox.innerHTML = '';
+                if (st.activeItem) {
+                    activeBox.appendChild(createPaperElement(st.activeItem.type));
+                }
+
+                let percentage = 0;
+                if (st.activeItem) {
+                    percentage = Math.min((st.progress / st.cycleTime) * 100, 100);
+                }
+                progBar.style.width = percentage + "%";
+            }
+        }
+
+        function renderQueues() {
+            for (let i = 2; i <= 4; i++) {
+                const qDiv = document.getElementById('ws' + i + '-queue');
+                qDiv.innerHTML = '';
+                for (let j = 0; j < stations[i].queue.length; j++) {
+                    qDiv.appendChild(createPaperElement(stations[i].queue[j].type));
+                }
+            }
+        }
+
+        function startSim() {
+            if (!isRunning) {
+                timerInterval = setInterval(simTick, tickRate);
+                isRunning = true;
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnPause').disabled = false;
+            }
+        }
+
+        function pauseSim() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnPause').disabled = true;
+            }
+        }
+
+        function resetSim() {
+            pauseSim();
+            clock = 0;
+            itemCounter = 0;
+            lastChartUpdate = 0;
+            
+            completedWhite = [];
+            completedOrange = [];
+            chartTimeLabels.length = 0;
+            wipWhiteData.length = 0;
+            wipOrangeData.length = 0;
+            
+            document.getElementById('clockDisplay').innerText = "0.0s";
+            document.getElementById('ltWhiteDisplay').innerText = "0.0s";
+            document.getElementById('ltOrangeDisplay').innerText = "0.0s";
+            
+            for (let i = 1; i <= 4; i++) {
+                stations[i].progress = 0;
+                stations[i].activeItem = null;
+                stations[i].queue = [];
+                const defaultTimes =;
+                const dTime = defaultTimes[i-1];
+                document.getElementById('ws' + i + '-slider').value = dTime;
+                updateCycleTime(i, dTime);
+            }
+            
+            renderQueues();
+            renderProgress();
+            calculateAndLogWIP();
+            updateLeadTimeAverages();
+            wipChart.update();
+        }
+    </script>
+</body>
+</html>
