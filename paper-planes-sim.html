@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paper Planes Corp: Lean Flow Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -22,11 +23,9 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-            border-top: 4px solid #005A9C; /* Academic Blue */
+            border-top: 4px solid #005A9C;
         }
-        .metric {
-            text-align: center;
-        }
+        .metric { text-align: center; }
         .metric h3 {
             margin: 0 0 5px 0;
             font-size: 0.9rem;
@@ -38,6 +37,7 @@
             font-weight: bold;
             color: #005A9C;
         }
+        .metric-orange { color: #e65100 !important; }
         .controls button {
             padding: 10px 20px;
             font-size: 1rem;
@@ -59,6 +59,7 @@
             display: flex;
             justify-content: space-between;
             gap: 15px;
+            margin-bottom: 20px;
         }
         .workstation {
             background-color: #fff;
@@ -87,9 +88,7 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        .slider-container input {
-            width: 100%;
-        }
+        .slider-container input { width: 100%; }
         .cycle-time-display {
             text-align: right;
             font-size: 0.85rem;
@@ -157,6 +156,33 @@
             text-transform: uppercase;
             margin-bottom: 3px;
         }
+
+        /* Analytics Section */
+        .analytics-container {
+            display: flex;
+            gap: 15px;
+            height: 300px;
+        }
+        .chart-card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-card h3 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 1rem;
+            color: #333;
+        }
+        .canvas-wrapper {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -167,12 +193,12 @@
             <span id="clockDisplay">0.0s</span>
         </div>
         <div class="metric">
-            <h3>Total System WIP</h3>
-            <span id="wipDisplay">0</span>
+            <h3>System WIP (White | Orange)</h3>
+            <span><span id="wipWhiteDisplay">0</span> | <span id="wipOrangeDisplay" class="metric-orange">0</span></span>
         </div>
         <div class="metric">
-            <h3>Throughput (Finished Planes)</h3>
-            <span id="throughputDisplay">0</span>
+            <h3>Avg Lead Time (White | Orange)</h3>
+            <span><span id="ltWhiteDisplay">0.0s</span> | <span id="ltOrangeDisplay" class="metric-orange">0.0s</span></span>
         </div>
         <div class="controls">
             <button class="btn-start" id="btnStart" onclick="startSim()">Start</button>
@@ -182,7 +208,6 @@
     </div>
 
     <div class="factory-floor">
-        <!-- Station 1 -->
         <div class="workstation">
             <h2>Operator 1<br><small>(Fold in half)</small></h2>
             <div class="queue-title">Raw Material (Infinite)</div>
@@ -200,7 +225,6 @@
             </div>
         </div>
 
-        <!-- Station 2 -->
         <div class="workstation">
             <h2>Operator 2<br><small>(1 Open, 4 Folds, 2 Tears)</small></h2>
             <div class="queue-title">Inbound WIP Queue</div>
@@ -216,7 +240,6 @@
             </div>
         </div>
 
-        <!-- Station 3 -->
         <div class="workstation">
             <h2>Operator 3<br><small>(1 Open, 4 Folds)</small></h2>
             <div class="queue-title">Inbound WIP Queue</div>
@@ -232,7 +255,6 @@
             </div>
         </div>
 
-        <!-- Station 4 -->
         <div class="workstation">
             <h2>Operator 4<br><small>(2 Final Folds)</small></h2>
             <div class="queue-title">Inbound WIP Queue</div>
@@ -249,21 +271,72 @@
         </div>
     </div>
 
+    <div class="analytics-container">
+        <div class="chart-card">
+            <h3>Live System WIP Accumulation</h3>
+            <div class="canvas-wrapper">
+                <canvas id="wipChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-card">
+            <h3>Average Lead Time (System Exit)</h3>
+            <div class="canvas-wrapper">
+                <canvas id="leadTimeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
     <script>
         // System Variables
         let timerInterval = null;
         let clock = 0;
-        let throughput = 0;
         let isRunning = false;
-        const tickRate = 100; // 100ms per logic tick (10 ticks = 1 virtual second)
+        let itemCounter = 0;
+        const tickRate = 100; // 100ms per tick
+        
+        // Data Tracking
+        let completedWhite = [];
+        let completedOrange = [];
+        let chartTimeLabels = [];
+        let wipWhiteData = [];
+        let wipOrangeData = [];
+        let lastChartUpdate = 0;
 
         // Workstation State Data
         const stations = {
-            1: { cycleTime: 2, progress: 0, activeItem: null, queue: [] }, // Queue 1 unused (infinite supply)
+            1: { cycleTime: 2, progress: 0, activeItem: null, queue: [] },
             2: { cycleTime: 10, progress: 0, activeItem: null, queue: [] },
             3: { cycleTime: 7, progress: 0, activeItem: null, queue: [] },
             4: { cycleTime: 3, progress: 0, activeItem: null, queue: [] }
         };
+
+        // Initialize Charts
+        const wipCtx = document.getElementById('wipChart').getContext('2d');
+        const wipChart = new Chart(wipCtx, {
+            type: 'line',
+            data: {
+                labels: chartTimeLabels,
+                datasets: [
+                    { label: 'White Planes (Standard)', borderColor: '#005A9C', backgroundColor: 'rgba(0, 90, 156, 0.1)', data: wipWhiteData, fill: true, tension: 0.2 },
+                    { label: 'Orange Planes (Special)', borderColor: '#e65100', backgroundColor: 'rgba(230, 81, 0, 0.1)', data: wipOrangeData, fill: true, tension: 0.2 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, suggestedMax: 10 } }, animation: false }
+        });
+
+        const ltCtx = document.getElementById('leadTimeChart').getContext('2d');
+        const leadTimeChart = new Chart(ltCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Standard (White)', 'Special Order (Orange)'],
+                datasets: [{
+                    label: 'Avg Lead Time (Seconds)',
+                    data:,
+                    backgroundColor: ['#005A9C', '#e65100']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+        });
 
         // UI Handlers
         function updateCycleTime(stationId, value) {
@@ -271,9 +344,9 @@
             document.getElementById(`ws${stationId}-display`).innerText = value + ".0s";
         }
 
-        function createPaperElement(color) {
+        function createPaperElement(type) {
             const el = document.createElement('div');
-            el.className = `paper-item paper-${color}`;
+            el.className = `paper-item paper-${type}`;
             return el;
         }
 
@@ -282,34 +355,35 @@
             clock += 0.1;
             document.getElementById('clockDisplay').innerText = clock.toFixed(1) + "s";
 
-            // Process Station 4 to 1 (Reverse order prevents same-tick queue jumping)
+            // Process reverse order
             for (let i = 4; i >= 1; i--) {
                 const st = stations[i];
 
-                // If station is idle but has items in queue, take one
                 if (!st.activeItem && (i === 1 || st.queue.length > 0)) {
                     if (i === 1) {
-                        // Supplier generates a new item (10% Orange, 90% White)
-                        st.activeItem = Math.random() < 0.1 ? 'orange' : 'white';
+                        itemCounter++;
+                        const type = Math.random() < 0.1 ? 'orange' : 'white';
+                        st.activeItem = { id: itemCounter, type: type, entryTime: clock };
                     } else {
-                        st.activeItem = st.queue.shift(); // Pull from queue
+                        st.activeItem = st.queue.shift();
                     }
                     st.progress = 0;
                     renderQueues();
                 }
 
-                // Process active item
                 if (st.activeItem) {
                     st.progress += 0.1;
-                    
-                    // Work completed
                     if (st.progress >= st.cycleTime) {
                         if (i === 4) {
-                            // Finished Good
-                            throughput++;
-                            document.getElementById('throughputDisplay').innerText = throughput;
+                            // Item Finishes - Calculate Lead Time
+                            const leadTime = clock - st.activeItem.entryTime;
+                            if (st.activeItem.type === 'white') {
+                                completedWhite.push(leadTime);
+                            } else {
+                                completedOrange.push(leadTime);
+                            }
+                            updateLeadTimeAverages();
                         } else {
-                            // Push to next station's queue
                             stations[i + 1].queue.push(st.activeItem);
                         }
                         st.activeItem = null;
@@ -320,7 +394,52 @@
             }
 
             renderProgress();
-            calculateTotalWIP();
+            calculateAndLogWIP();
+        }
+
+        function updateLeadTimeAverages() {
+            const avgW = completedWhite.length > 0 ? completedWhite.reduce((a,b) => a+b, 0) / completedWhite.length : 0;
+            const avgO = completedOrange.length > 0 ? completedOrange.reduce((a,b) => a+b, 0) / completedOrange.length : 0;
+            
+            document.getElementById('ltWhiteDisplay').innerText = avgW.toFixed(1) + "s";
+            document.getElementById('ltOrangeDisplay').innerText = avgO.toFixed(1) + "s";
+
+            leadTimeChart.data.datasets.data = [avgW.toFixed(1), avgO.toFixed(1)];
+            leadTimeChart.update();
+        }
+
+        function calculateAndLogWIP() {
+            let whiteCount = 0;
+            let orangeCount = 0;
+
+            for (let i = 1; i <= 4; i++) {
+                if (stations[i].activeItem) {
+                    stations[i].activeItem.type === 'white' ? whiteCount++ : orangeCount++;
+                }
+                stations[i].queue.forEach(item => {
+                    item.type === 'white' ? whiteCount++ : orangeCount++;
+                });
+            }
+
+            document.getElementById('wipWhiteDisplay').innerText = whiteCount;
+            document.getElementById('wipOrangeDisplay').innerText = orangeCount;
+
+            // Update Chart every 1 virtual second
+            if (clock - lastChartUpdate >= 1) {
+                chartTimeLabels.push(Math.floor(clock) + 's');
+                wipWhiteData.push(whiteCount);
+                wipOrangeData.push(orangeCount);
+                
+                // Keep chart from getting too long (max 60 data points)
+                if (chartTimeLabels.length > 60) {
+                    chartTimeLabels.shift();
+                    wipWhiteData.shift();
+                    wipOrangeData.shift();
+                }
+                
+                wipChart.update();
+                lastChartUpdate = clock;
+            }
         }
 
         // Rendering Functions
@@ -330,38 +449,24 @@
                 const activeBox = document.getElementById(`ws${i}-job`);
                 const progBar = document.getElementById(`ws${i}-progress`);
                 
-                // Render active item in the bounding box
                 activeBox.innerHTML = '';
                 if (st.activeItem) {
-                    activeBox.appendChild(createPaperElement(st.activeItem));
+                    activeBox.appendChild(createPaperElement(st.activeItem.type));
                 }
 
-                // Render progress bar percentage
                 const percentage = st.activeItem ? Math.min((st.progress / st.cycleTime) * 100, 100) : 0;
                 progBar.style.width = percentage + "%";
             }
         }
 
         function renderQueues() {
-            // Render queues for stations 2, 3, 4
             for (let i = 2; i <= 4; i++) {
                 const qDiv = document.getElementById(`ws${i}-queue`);
                 qDiv.innerHTML = '';
-                stations[i].queue.forEach(itemType => {
-                    qDiv.appendChild(createPaperElement(itemType));
+                stations[i].queue.forEach(item => {
+                    qDiv.appendChild(createPaperElement(item.type));
                 });
             }
-        }
-
-        function calculateTotalWIP() {
-            let wip = 0;
-            // Sum all queues and active processing items (excluding infinite raw materials)
-            for (let i = 2; i <= 4; i++) {
-                wip += stations[i].queue.length;
-                if (stations[i].activeItem) wip += 1;
-            }
-            if (stations[1].activeItem) wip += 1; // Item being processed at station 1
-            document.getElementById('wipDisplay').innerText = wip;
         }
 
         // Controls
@@ -386,16 +491,25 @@
         function resetSim() {
             pauseSim();
             clock = 0;
-            throughput = 0;
+            itemCounter = 0;
+            lastChartUpdate = 0;
+            
+            // Reset Arrays
+            completedWhite = [];
+            completedOrange = [];
+            chartTimeLabels.length = 0;
+            wipWhiteData.length = 0;
+            wipOrangeData.length = 0;
+            
             document.getElementById('clockDisplay').innerText = "0.0s";
-            document.getElementById('throughputDisplay').innerText = "0";
+            document.getElementById('ltWhiteDisplay').innerText = "0.0s";
+            document.getElementById('ltOrangeDisplay').innerText = "0.0s";
             
             for (let i = 1; i <= 4; i++) {
                 stations[i].progress = 0;
                 stations[i].activeItem = null;
                 stations[i].queue = [];
-                // Reset sliders to default Paper Planes times
-                const defaultTimes = [2, 10, 7, 3];
+                const defaultTimes =;
                 const dTime = defaultTimes[i-1];
                 document.getElementById(`ws${i}-slider`).value = dTime;
                 updateCycleTime(i, dTime);
@@ -403,7 +517,9 @@
             
             renderQueues();
             renderProgress();
-            calculateTotalWIP();
+            calculateAndLogWIP();
+            updateLeadTimeAverages();
+            wipChart.update();
         }
     </script>
 </body>
